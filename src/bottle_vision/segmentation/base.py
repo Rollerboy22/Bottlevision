@@ -1,4 +1,4 @@
-"""Segmentation backend interface and safe placeholder implementation."""
+"""Segmentation backend interface and safe backend selection."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class Segmenter(ABC):
 
 
 class UnconfiguredSegmenter(Segmenter):
-    """Safe backend used until a real foundation model is configured."""
+    """Safe backend used when no model runtime is configured."""
 
     model_name = "unconfigured"
     model_version = "0"
@@ -45,9 +45,24 @@ class UnconfiguredSegmenter(Segmenter):
 
 
 def build_segmenter(config: dict[str, Any]) -> Segmenter:
-    """Build the configured backend; currently only the safe stub is available."""
+    """Build the configured segmentation backend without importing heavy ML packages."""
     segmentation = config.get("segmentation", {})
     preferred = str(segmentation.get("preferred_model", "sam3")).lower()
-    if preferred in {"sam3", "sam2"}:
-        return UnconfiguredSegmenter()
+
+    if preferred == "sam3":
+        from .sam3 import Sam3Segmenter
+
+        return Sam3Segmenter(
+            checkpoint_path=segmentation.get("checkpoint_path"),
+            device=str(segmentation.get("device", "cuda")),
+            prompt=str(segmentation.get("prompt", "bottle")),
+            min_confidence=float(segmentation.get("min_confidence", 0.50)),
+            min_quality_score=float(segmentation.get("min_quality_score", 0.50)),
+            min_area_ratio=float(segmentation.get("min_area_ratio", 0.001)),
+            max_area_ratio=float(segmentation.get("max_area_ratio", 0.95)),
+            load_from_hf=bool(segmentation.get("load_from_hf", True)),
+        )
+
+    # SAM 2 and other backends remain explicit future adapters. Returning the
+    # safe stub is preferable to silently substituting a different model.
     return UnconfiguredSegmenter()
