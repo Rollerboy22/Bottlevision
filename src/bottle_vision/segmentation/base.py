@@ -47,6 +47,7 @@ class UnconfiguredSegmenter(Segmenter):
 def build_segmenter(config: dict[str, Any]) -> Segmenter:
     """Build the configured segmentation backend without importing heavy ML packages."""
     segmentation = config.get("segmentation", {})
+    quality = config.get("quality", {})
     preferred = str(segmentation.get("preferred_model", "sam3")).lower()
 
     if preferred == "sam3":
@@ -58,8 +59,8 @@ def build_segmenter(config: dict[str, Any]) -> Segmenter:
             prompt=str(segmentation.get("prompt", "bottle")),
             min_confidence=float(segmentation.get("min_confidence", 0.50)),
             min_quality_score=float(segmentation.get("min_quality_score", 0.50)),
-            min_area_ratio=float(segmentation.get("min_area_ratio", 0.001)),
-            max_area_ratio=float(segmentation.get("max_area_ratio", 0.95)),
+            min_area_ratio=float(quality.get("min_area_ratio", 0.001)),
+            max_area_ratio=float(quality.get("max_area_ratio", 0.95)),
             load_from_hf=bool(segmentation.get("load_from_hf", True)),
         )
 
