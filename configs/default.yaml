@@ -10,6 +10,11 @@ paths:
 segmentation:
   prompt: bottle
   preferred_model: sam3
+  device: cuda
+  checkpoint_path: null
+  load_from_hf: true
+  min_confidence: 0.50
+  min_quality_score: 0.50
   fallback_models:
     - sam2
 
