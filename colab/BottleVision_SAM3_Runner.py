@@ -14,7 +14,11 @@ import numpy as np
 from PIL import Image
 
 from bottle_vision.config import load_config
-from bottle_vision.segmentation import SegmentationResult, build_segmenter
+from bottle_vision.segmentation import (
+    SegmentationResult,
+    build_segmenter,
+    make_review_views,
+)
 
 
 ROOT = Path.cwd()
@@ -39,6 +43,16 @@ def run_segmentation(image: np.ndarray, config: dict[str, Any] | None = None) ->
     return segmenter.segment(image)
 
 
+def build_review_views(
+    image: np.ndarray,
+    result: SegmentationResult,
+    *,
+    alpha: float = 0.45,
+) -> dict[str, np.ndarray]:
+    """Build Original / Mask / Overlay views for human inspection."""
+    return make_review_views(image, result, alpha=alpha)
+
+
 def summarize_result(result: SegmentationResult) -> dict[str, Any]:
     """Return a JSON-friendly summary suitable for Colab output."""
     return {
@@ -55,6 +69,7 @@ def summarize_result(result: SegmentationResult) -> dict[str, Any]:
                 "quality_score": item.quality.score if item.quality else None,
                 "quality_valid": item.quality.valid if item.quality else False,
                 "quality_reasons": list(item.quality.reasons) if item.quality else ["not_scored"],
+                "accepted_by_gate": bool(item.metadata.get("accepted_by_gate", False)),
             }
             for item in result.instances
         ],
