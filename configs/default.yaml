@@ -1,0 +1,27 @@
+project:
+  name: bottle_vision
+  version: 0.1.0
+
+paths:
+  dataset: dataset
+  artifacts: artifacts
+  logs: logs
+
+segmentation:
+  prompt: bottle
+  preferred_model: sam3
+  fallback_models:
+    - sam2
+
+quality:
+  decision_policy: review_uncertain
+
+classification:
+  classes_file: classes.json
+
+training:
+  split:
+    train: 0.80
+    val: 0.10
+    test: 0.10
+    group_by: group_id
