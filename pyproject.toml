@@ -18,6 +18,13 @@ dev = [
   "pytest>=8,<9",
   "ruff>=0.6,<1",
 ]
+sam3 = [
+  "Pillow>=10,<12",
+  "torch>=2.7",
+  "torchvision>=0.22",
+  "huggingface_hub>=0.30",
+  "sam3 @ git+https://github.com/facebookresearch/sam3.git",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
