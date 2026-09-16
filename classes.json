@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "classes": [
+    {"id": "transparent", "name": "Transparent"},
+    {"id": "green", "name": "Green"},
+    {"id": "brown", "name": "Brown"},
+    {"id": "blue", "name": "Blue"},
+    {"id": "other", "name": "Other"}
+  ]
+}
