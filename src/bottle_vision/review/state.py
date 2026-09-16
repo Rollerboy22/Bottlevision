@@ -25,6 +25,20 @@ class ReviewState:
     verified: bool = False
     instances: list[dict[str, Any]] = field(default_factory=list)
 
+    def set_instance_class(self, instance_id: int, class_id: str) -> "ReviewState":
+        """Assign a human-verified class to one segmentation instance."""
+        if not class_id:
+            raise ValueError("class_id is required")
+        for instance in self.instances:
+            if int(instance.get("instance_id", -1)) == int(instance_id):
+                instance["class_id"] = class_id
+                return self
+        raise ValueError(f"Unknown instance_id: {instance_id}")
+
+    def all_instances_classified(self) -> bool:
+        """Return whether every segmented instance has a class assignment."""
+        return bool(self.instances) and all(bool(item.get("class_id")) for item in self.instances)
+
     def apply(
         self,
         action: ReviewAction,
@@ -32,9 +46,13 @@ class ReviewState:
         class_id: str | None = None,
         notes: str = "",
     ) -> "ReviewState":
-        """Apply a review action while enforcing class requirements."""
-        if action is ReviewAction.CHANGE_CLASS and not class_id:
-            raise ValueError("class_id is required for CHANGE_CLASS")
+        """Apply a review action while enforcing verification requirements."""
+        if action in {ReviewAction.ACCEPT, ReviewAction.CHANGE_CLASS} and not self.all_instances_classified():
+            if class_id:
+                for instance in self.instances:
+                    instance["class_id"] = class_id
+            else:
+                raise ValueError("Every instance must have a class before verification")
         self.action = action
         self.class_id = class_id
         self.notes = notes
