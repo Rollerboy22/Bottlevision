@@ -3,6 +3,12 @@
 SAM 3 is intentionally an optional dependency. Importing Bottle Vision must
 remain possible in a lightweight test/Colab environment until the SAM 3
 runtime is installed and its checkpoint access is configured.
+
+The adapter also contains a small compatibility shim for legacy CUDA GPUs
+such as NVIDIA Tesla T4. Current SAM 3 ViT MLP inference uses a fused
+addmm_act path that casts its first-layer activation to bfloat16. T4 is
+pre-Ampere, so we use the equivalent unfused PyTorch MLP path there and keep
+the model/input tensors in float32.
 """
 
 from __future__ import annotations
@@ -16,14 +22,54 @@ from .quality import score_mask
 from .types import SegmentationInstance, SegmentationResult
 
 
-class Sam3Segmenter(Segmenter):
-    """Text-prompted SAM 3 image segmenter with a mask quality gate.
+_SAM3_LEGACY_MLP_PATCHED = False
 
-    The adapter uses the official SAM 3 image processor API:
-    ``set_image`` followed by ``set_text_prompt``. Bounding boxes returned by
-    SAM 3 are deliberately ignored because masks are the project's canonical
-    annotation.
-    """
+
+def _patch_sam3_vit_mlp_for_legacy_cuda() -> None:
+    """Disable SAM 3's bfloat16 fused ViT MLP path on pre-Ampere CUDA GPUs."""
+    global _SAM3_LEGACY_MLP_PATCHED
+    if _SAM3_LEGACY_MLP_PATCHED:
+        return
+
+    from sam3.model.vitdet import Mlp
+
+    if getattr(Mlp, "_bottle_vision_float32_fallback", False):
+        _SAM3_LEGACY_MLP_PATCHED = True
+        return
+
+    def forward_float32(self: Any, x: Any) -> Any:
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop1(x)
+        x = self.norm(x)
+        x = self.fc2(x)
+        x = self.drop2(x)
+        return x
+
+    Mlp.forward = forward_float32
+    Mlp._bottle_vision_float32_fallback = True
+    _SAM3_LEGACY_MLP_PATCHED = True
+
+
+def _is_legacy_cuda(device: str) -> bool:
+    """Return whether device points at a pre-Ampere CUDA GPU."""
+    if not str(device).startswith("cuda"):
+        return False
+
+    import torch
+
+    if not torch.cuda.is_available():
+        return False
+
+    index = torch.device(device).index
+    if index is None:
+        index = torch.cuda.current_device()
+    major, _minor = torch.cuda.get_device_capability(index)
+    return major < 8
+
+
+class Sam3Segmenter(Segmenter):
+    """Text-prompted SAM 3 image segmenter with a mask quality gate."""
 
     model_name = "sam3"
 
@@ -71,6 +117,11 @@ class Sam3Segmenter(Segmenter):
                 "before using Sam3Segmenter."
             ) from exc
 
+        legacy_cuda = _is_legacy_cuda(self._device)
+
+        if legacy_cuda:
+            _patch_sam3_vit_mlp_for_legacy_cuda()
+
         if self._model is None:
             self._model = build_sam3_image_model(
                 checkpoint_path=self._checkpoint_path,
@@ -79,6 +130,10 @@ class Sam3Segmenter(Segmenter):
                 eval_mode=True,
                 enable_segmentation=True,
             )
+
+        if legacy_cuda:
+            self._model = self._model.float().eval()
+
         self._processor = Sam3Processor(self._model)
         self.model_version = getattr(self._model, "__version__", "sam3")
 
@@ -158,7 +213,7 @@ class Sam3Segmenter(Segmenter):
 
 
 def _to_numpy_masks(value: Any) -> np.ndarray:
-    """Convert SAM 3 tensor/list output to ``(N,H,W)`` boolean masks."""
+    """Convert SAM 3 tensor/list output to (N,H,W) boolean masks."""
     if hasattr(value, "detach"):
         value = value.detach().cpu().numpy()
     array = np.asarray(value)
