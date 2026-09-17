@@ -1,9 +1,4 @@
-"""Minimal Google Colab runner for the Bottle Vision SAM 3 pipeline.
-
-This module intentionally keeps the notebook layer thin: configuration and
-model loading live in the package, while Colab only installs dependencies,
-loads an image, runs segmentation, and prints review-safe results.
-"""
+"""Thin Google Colab runner for the Bottle Vision SAM 3 pipeline."""
 
 from __future__ import annotations
 
@@ -14,33 +9,26 @@ import numpy as np
 from PIL import Image
 
 from bottle_vision.config import load_config
-from bottle_vision.segmentation import (
-    SegmentationResult,
-    build_segmenter,
-    make_review_views,
-)
-
+from bottle_vision.pipeline import PipelineResult, run_pipeline
+from bottle_vision.segmentation import SegmentationResult, make_review_views
 
 ROOT = Path.cwd()
 CONFIG_PATH = ROOT / "configs" / "default.yaml"
 
 
 def load_bottle_vision_config(path: str | Path = CONFIG_PATH) -> dict[str, Any]:
-    """Load the repository configuration."""
     return load_config(path)
 
 
 def load_rgb_image(path: str | Path) -> np.ndarray:
-    """Load an image as HxWx3 uint8 RGB data."""
     with Image.open(path) as image:
         return np.asarray(image.convert("RGB"), dtype=np.uint8)
 
 
 def run_segmentation(image: np.ndarray, config: dict[str, Any] | None = None) -> SegmentationResult:
-    """Run the configured segmenter and return pixel masks plus quality signals."""
+    """Run the real configured pipeline and return its canonical segmentation result."""
     cfg = config or load_bottle_vision_config()
-    segmenter = build_segmenter(cfg)
-    return segmenter.segment(image)
+    return run_pipeline(image, cfg).segmentation
 
 
 def build_review_views(
@@ -49,13 +37,18 @@ def build_review_views(
     *,
     alpha: float = 0.45,
 ) -> dict[str, np.ndarray]:
-    """Build Original / Mask / Overlay views for human inspection."""
     return make_review_views(image, result, alpha=alpha)
 
 
 def summarize_result(result: SegmentationResult) -> dict[str, Any]:
-    """Return a JSON-friendly summary suitable for Colab output."""
+    """Return a JSON-friendly result summary."""
+    decision = "reject" if result.error else (
+        "review" if not result.instances else
+        "accept" if all(bool(x.metadata.get("accepted_by_gate", False)) for x in result.instances)
+        else "review"
+    )
     return {
+        "decision": decision,
         "model": result.model_name,
         "model_version": result.model_version,
         "prompt": result.prompt,
@@ -77,4 +70,4 @@ def summarize_result(result: SegmentationResult) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    print("Bottle Vision Colab runner loaded. Call run_segmentation(image) from the notebook.")
+    print("Bottle Vision Colab runner loaded.")
