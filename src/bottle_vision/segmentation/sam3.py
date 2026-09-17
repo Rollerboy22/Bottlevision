@@ -39,10 +39,14 @@ def _patch_sam3_vit_mlp_for_legacy_cuda() -> None:
         return
 
     def forward_float32(self: Any, x: Any) -> Any:
+        # SAM3's fused addmm_act may return BF16 on pre-Ampere GPUs even when
+        # the ViT parameters are float32. Keep the first MLP branch in its
+        # native output dtype, then explicitly restore float32 before fc2.
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
         x = self.norm(x)
+        x = x.float()
         x = self.fc2(x)
         x = self.drop2(x)
         return x
