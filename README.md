@@ -52,6 +52,12 @@ On Windows PowerShell:
 
 Only human-verified samples may enter the training dataset.
 
+## SAM 3 on Tesla T4
+
+The SAM 3 image processor's public transform converts the input image to `float32` before calling `backbone.forward_image`. The T4-specific `BFloat16`/`Float` mismatch is deeper in the ViT MLP: SAM 3's fused `addmm_act` path can cast the first MLP activation to bfloat16 while the linear weights remain float32. NVIDIA Tesla T4 is a pre-Ampere GPU, so Bottle Vision automatically switches the SAM 3 ViT MLP to the equivalent unfused PyTorch path and keeps the model in float32. No notebook-level monkey patch or `autocast(bfloat16)` is required.
+
+This workaround is intentionally inside the SAM 3 adapter so the Colab runner and the pipeline remain the same on T4 and newer GPUs.
+
 ## Tests
 
 ```bash
