@@ -13,6 +13,7 @@ the model/input tensors in float32.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Any
 
 import numpy as np
@@ -149,11 +150,17 @@ class Sam3Segmenter(Segmenter):
 
         self._ensure_loaded()
 
+        import torch
         from PIL import Image
 
         pil_image = Image.fromarray(array, mode="RGB")
-        state = self._processor.set_image(pil_image)
-        output = self._processor.set_text_prompt(state=state, prompt=self.prompt)
+        if _is_legacy_cuda(self._device):
+            inference_context = torch.autocast(device_type="cuda", enabled=False)
+        else:
+            inference_context = nullcontext()
+        with inference_context:
+            state = self._processor.set_image(pil_image)
+            output = self._processor.set_text_prompt(state=state, prompt=self.prompt)
 
         masks = output.get("masks")
         scores = output.get("scores")
