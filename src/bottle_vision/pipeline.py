@@ -1,13 +1,14 @@
-"""Core pipeline contracts.
+"""Model-independent orchestration for the Bottle Vision inference path."""
 
-Model-specific implementations will be added later. The foundation keeps
-segmentation and classification stages explicit so they cannot be silently
-replaced by bounding-box-only logic.
-"""
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+
+import numpy as np
+
+from bottle_vision.segmentation import SegmentationResult, build_segmenter
 
 
 class Decision(StrEnum):
@@ -18,16 +19,42 @@ class Decision(StrEnum):
 
 @dataclass(frozen=True)
 class PipelineResult:
-    """Model-independent result passed between UI, storage, and training."""
+    """Segmentation result plus a conservative automatic decision."""
 
     decision: Decision
-    instances: list[dict[str, Any]]
-    pipeline_version: str = "0.1.0"
+    segmentation: SegmentationResult
+    pipeline_version: str = "0.2.0"
+
+    @property
+    def instances(self):
+        return self.segmentation.instances
+
+
+def run_pipeline(image: np.ndarray, config: dict[str, Any]) -> PipelineResult:
+    """Run configured segmentation and apply the project decision policy.
+
+    Automatic acceptance is intentionally conservative: every returned
+    instance must pass both confidence and independent mask-quality gates.
+    Anything uncertain is REVIEW; an actual backend error is REJECT.
+    """
+    segmenter = build_segmenter(config)
+    result = segmenter.segment(image)
+    if result.error:
+        return PipelineResult(Decision.REJECT, result)
+    if not result.instances:
+        return PipelineResult(Decision.REVIEW, result)
+
+    all_accepted = all(bool(item.metadata.get("accepted_by_gate", False)) for item in result.instances)
+    return PipelineResult(Decision.ACCEPT if all_accepted else Decision.REVIEW, result)
 
 
 def empty_result(reason: str = "segmentation_not_implemented") -> PipelineResult:
-    """Return a safe REVIEW result until a real segmenter is configured."""
-    return PipelineResult(
-        decision=Decision.REVIEW,
-        instances=[{"status": reason}],
+    """Backward-compatible safe result for callers that need an empty state."""
+    from bottle_vision.segmentation.types import SegmentationResult
+
+    result = SegmentationResult(
+        instances=(),
+        image_shape=(0, 0),
+        error=reason,
     )
+    return PipelineResult(Decision.REVIEW, result)
