@@ -1,56 +1,75 @@
 # Bottle Vision — Project Plan
 
-## Phase 0 — Foundation
+## Delivery strategy
+
+Build the project in working vertical slices. Every slice must be runnable and tested before the next layer is added. Google Colab uses one normal GPU runtime; no nested Python/Conda/uv environment is part of the primary path.
+
+## Phase 0 — Foundation — complete
 - Repository rules and architecture.
 - Configuration and class schema.
 - Metadata model.
 - Persistence abstraction.
 - Test foundation.
+- Fixed `config.py` / `config/` import collision.
 
-## Phase 1 — Segmentation
-- Model adapter interface.
-- SAM 3 integration where practical.
-- SAM 2/fallback adapter.
-- Multiple-instance masks.
-- Mask postprocessing.
-- Segmentation quality scoring.
+## Phase 1 — SAM 3 inference — current
+- Stable Colab GPU bootstrap.
+- Explicit CUDA-compatible PyTorch/TorchVision installation.
+- NumPy compatibility guard.
+- Explicit `einops` dependency.
+- SAM 3 import/API smoke test.
+- Hugging Face checkpoint authentication path.
+- Text-prompted multi-instance masks.
+- Independent mask quality gate.
+- Original / Mask / Overlay review views.
 
-## Phase 2 — Classification and color analysis
-- Material/color classes.
-- Mask-aware color extraction.
-- Transparent-object handling.
-- Confidence and decision engine.
+**Exit condition:** a fresh Colab GPU runtime can upload a bottle image and produce reviewable masks without a second Python environment.
 
-## Phase 3 — Review UI
-- Original / Mask / Overlay.
+## Phase 2 — Review and verified dataset — next
+- Durable queue/state machine.
 - ACCEPT / CHANGE CLASS / REJECT / RESEGMENT.
-- Human verification persistence.
+- Configuration-driven classes.
+- Verified-only dataset promotion.
+- Metadata and artifact manifests.
+- Resume/retry after interruption.
 
-## Phase 4 — Batch and dataset
-- Queue/state machine.
-- Resume/retry/failure handling.
-- Dataset promotion.
-- 80/10/10 leakage-safe split.
+## Phase 3 — Material and color analysis
+- Mask-aware color extraction.
+- Label/background/reflection suppression.
+- Transparent-object handling.
+- Material-aware classification.
+- Confidence and REVIEW policy.
+
+## Phase 4 — Batch dataset pipeline
+- Image queue.
+- Resume/retry/failure states.
+- Group-aware 80/10/10 split.
+- Leakage prevention by physical object/session.
+- Dataset validation and manifest generation.
 
 ## Phase 5 — Training
-- Verified-data-only training pipeline.
-- Classification and segmentation metrics.
-- Experiment tracking and reproducibility.
+- Verified-data-only training.
+- Reproducible experiment configuration.
+- Classification metrics.
+- Segmentation metrics where applicable.
+- Checkpoint/version metadata.
 
 ## Phase 6 — Recognition
 - Camera workflow.
-- Real-time inference interface.
+- Real-time lightweight inference.
+- Unknown/review output instead of forced labels.
 
 ## Phase 7 — Export
 - PyTorch / ONNX / TFLite as appropriate.
 - INT8 quantization.
-- Size/latency/accuracy validation.
+- Size, latency and accuracy validation.
 
 ## Phase 8 — ESP32-S3
-- Select lightweight architecture.
+- Select lightweight recognition architecture.
 - Export and validate INT8 model.
 - Embedded inference integration.
 - Device-side performance tests.
 
-## Current milestone
-Establish the repository foundation before implementing model-specific code.
+## Non-negotiable acceptance criteria
+
+A feature is not considered complete merely because it imports. It must have a runnable path, deterministic configuration, safe failure behavior, persistence where required, and automated tests for its CPU-testable logic.
